@@ -1,0 +1,99 @@
+#!/usr/bin/awk -f
+
+# From https://gist.github.com/andrewrcollins/1592991
+function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+function rtrim(s) { sub(/[ \t\r\n]+$/, "", s); return s }
+function trim(s)  { return rtrim(ltrim(s)); }
+
+function section(header) {
+	$1="";
+	$0=trim($0);
+	print header;
+	print;
+}
+
+function array_length(array) {
+	len=0
+	for (a in array) { len++ }
+	return len
+}
+
+function unsplit(array, delimeter) {
+	temp=""
+	max=array_length(array)
+	for (i=1; i < max; i++) {
+		temp=sprintf("%s%s%s", temp, array[i], delimeter)
+	}
+	temp=sprintf("%s%s", temp, array[max])
+
+	return temp
+}
+
+BEGIN {
+	new_paragraph=0
+	bold=0
+	italic=0
+}
+
+# Title
+/^\# / {
+	section(".TL");
+	new_paragraph=1;
+	next;
+}
+
+## Header
+/^## / {
+	section(".NH 1");
+	new_paragraph=1
+	next;
+}
+
+# Blank line before paragraph begins
+/^$/ { new_paragraph=1; next }
+
+# Embedded Troff Macro
+/^.AU/ { print; new_paragraph=0; next }
+
+# Expand Bold text
+/\*\*/ {
+	n=split($0, parts, "\\\*\\\*")
+	for (p=1; p<=n; p++) {
+		parts[p]=trim(parts[p])
+		if (bold == 1) {
+			m=split(parts[p], words, /[ \t]+/)
+			for (w=1; w<=m; w++) {
+				words[w]=".B "words[w]
+			}
+			parts[p]=unsplit(words, "\n")
+		}
+		bold=!bold
+	}
+	$0=unsplit(parts, "\n")
+}
+
+# Expand italic text
+/\*/ {
+	n=split($0, parts, "\\\*")
+	for (p=1; p<=n; p++) {
+		parts[p]=trim(parts[p])
+		if (italic == 1) {
+			m=split(parts[p], words, /[ \t]+/)
+			for (w=1; w<=m; w++) {
+				words[w]=".I "words[w]
+			}
+			parts[p]=unsplit(words, "\n")
+		}
+		italic=!italic
+	}
+	$0=unsplit(parts, "\n")
+}
+
+# Normal line
+{
+	if (new_paragraph) {
+		print ".PP"
+		new_paragraph=0
+	}
+	print
+}
